@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: cme-app
+    env: docker
+    plan: free
+    branch: main
+    autoDeploy: true

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOMC Meetings - Probability Summary</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #f1f5f9;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 1050px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 16px;
+        }
+        h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-top: 50px;
+            margin-bottom: 8px;
+        }
+        p.intro {
+            color: #94a3b8;
+            line-height: 1.6;
+            font-size: 15px;
+            margin-bottom: 24px;
+        }
+        .banner {
+            background-color: #1e1e24;
+            border-left: 4px solid #6366f1;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 32px;
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+        .banner-sub {
+            margin-top: 6px;
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th {
+            font-size: 13px;
+            font-weight: 600;
+            color: #94a3b8;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #27272a;
+        }
+        th .sub {
+            display: block;
+            font-weight: 400;
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+        td {
+            padding: 20px 0;
+            border-bottom: 1px solid #1e1e24;
+            font-size: 15px;
+            vertical-align: middle;
+        }
+        .meeting-date {
+            font-weight: 600;
+            color: #ffffff;
+            width: 22%;
+        }
+        .move-cell {
+            width: 38%;
+            padding-right: 20px;
+        }
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .progress-bar-bg {
+            flex-grow: 1;
+            background-color: #27272a;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            background-color: #f97316;
+            height: 100%;
+            border-radius: 5px;
+            width: 0%;
+        }
+        .prob-text {
+            font-weight: 600;
+            color: #ffffff;
+            min-width: 48px;
+            text-align: right;
+        }
+        .bp-text {
+            font-size: 13px;
+            color: #fb923c;
+            font-weight: 600;
+            min-width: 65px;
+        }
+        .rate-cell {
+            width: 40%;
+            text-align: right;
+        }
+        .rate-value {
+            font-weight: 600;
+            color: #ffffff;
+            margin-right: 16px;
+        }
+        .pills-container {
+            display: inline-flex;
+            gap: 6px;
+            vertical-align: middle;
+        }
+        .pill {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .pill-higher { background-color: #451a03; color: #fde68a; }
+        .pill-same { background-color: #27272a; color: #cbd5e1; }
+        .pill-lower { background-color: #082f49; color: #7dd3fc; }
+        
+        .matrix-section p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .matrix-table {
+            margin-top: 10px;
+        }
+        .matrix-table th {
+            padding: 12px 16px;
+            text-align: center;
+            color: #94a3b8;
+            font-weight: 600;
+            border-bottom: 1px solid #27272a;
+        }
+        .matrix-table th:first-child {
+            text-align: left;
+        }
+        .matrix-table td {
+            padding: 12px 16px;
+            text-align: center;
+            border-bottom: 1px solid #1e1e24;
+        }
+        .matrix-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: #ffffff;
+        }
+        .matrix-cell {
+            border-radius: 6px;
+            padding: 10px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .matrix-footer {
+            margin-top: 16px;
+            font-size: 13px;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FOMC Meetings - Probability Summary</h1>
+        <p class="intro">
+            The Federal Open Market Committee meets eight times a year to set the target range for the federal funds rate. Rate change probabilities are calculated dynamically from live market futures data.
+        </p>
+        
+        <div class="banner">
+            <div>{{ banner }}</div>
+            <div class="banner-sub">{{ banner_sub }}</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Meeting</th>
+                    <th>Move at this meeting<span class="sub">The fresh move priced for this date alone</span></th>
+                    <th style="text-align: right;">Rate level by this date<span class="sub" style="text-align: right;">Cumulative — already includes every move priced for earlier meetings</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if meetings %}
+                    {% for m in meetings %}
+                    <tr>
+                        <td class="meeting-date">{{ m.date }}</td>
+                        <td class="move-cell">
+                            <div class="progress-container">
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill" data-width="{{ m.prob_width }}"></div>
+                                </div>
+                                <span class="prob-text">{{ m.probability }}</span>
+                                <span class="bp-text">{{ m.bp }}</span>
+                            </div>
+                        </td>
+                        <td class="rate-cell">
+                            <span class="rate-value">{{ m.rate }}</span>
+                            <div class="pills-container">
+                                <span class="pill pill-higher">{{ m.higher }}</span>
+                                <span class="pill pill-same">{{ m.same }}</span>
+                                <span class="pill pill-lower">{{ m.lower }}</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="empty-state">No live meeting data available at the moment.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        <div class="matrix-section">
+            <h2>Where the market thinks the rate will be</h2>
+            <p>Each column is one meeting; each row is a policy rate level. Darker means the market puts more weight on that level being in force after that meeting.</p>
+            
+            <table class="matrix-table">
+                <thead>
+                    <tr>
+                        {% for h in matrix_headers %}
+                        <th>{{ h }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in matrix_rows %}
+                    <tr>
+                        {% for cell in row %}
+                            {% if cell.is_header %}
+                            <td>{{ cell.val }}</td>
+                            {% else %}
+                            <td>
+                                {% if cell.val %}
+                                <div class="matrix-cell" data-bg="{{ cell.bg }}" data-color="{{ cell.color }}">
+                                    {{ cell.val }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="matrix-footer">
+                <span>Shading: share of probability on that rate level. Blank cells carry under 0.5%.</span>
+                <span id="current-date"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.querySelectorAll('.progress-bar-fill').forEach(el => {
+            const w = el.getAttribute('data-width');
+            if (w) el.style.width = w;
+        });
+
+        document.querySelectorAll('.matrix-cell').forEach(el => {
+            el.style.backgroundColor = el.getAttribute('data-bg');
+            el.style.color = el.getAttribute('data-color');
+        });
+        
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-US', options);
+    </script>
+</body>
+</html>
