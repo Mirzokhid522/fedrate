@@ -9,23 +9,33 @@ from bs4 import BeautifulSoup
 import time
 import re
 import os
+import threading
 
 app = Flask(__name__)
 
+# Global cache so page loads instantly without blocking port checks
+cache = {
+    "banner_text": "Fetching live FOMC expectations...",
+    "banner_sub": "Data updates automatically in the background.",
+    "meetings": [],
+    "matrix_headers": ["Rate", "Sep 26", "Oct 26", "Dec 26"],
+    "matrix_rows": [],
+    "last_updated": 0
+}
+
 def scrape_fomc_data():
+    global cache
     options = Options()
     options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-
-    # Set binary path for Linux (Render) environment
+    options.add_argument("--disable-gpu")
+    
     if os.path.exists("/usr/bin/chromium"):
         options.binary_location = "/usr/bin/chromium"
     elif os.path.exists("/usr/bin/chromium-browser"):
         options.binary_location = "/usr/bin/chromium-browser"
 
-    # Set driver path for Linux (Render) environment
     if os.path.exists("/usr/bin/chromedriver"):
         service = Service("/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=options)
@@ -41,7 +51,6 @@ def scrape_fomc_data():
 
         soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-        # --- 1. Scrape First Table ---
         banner_text = "Markets price tightening across upcoming meetings."
         banner_sub = "Per-meeting percentages describe the same single expected path."
 
@@ -97,17 +106,14 @@ def scrape_fomc_data():
                         "lower": lower_val
                     })
 
-        # --- 2. Scrape Second Matrix Table ---
         matrix_headers = []
         matrix_rows = []
-
         tables = soup.find_all('table')
         for table in tables:
             trs = table.find_all('tr')
             if trs:
                 header_cells = trs[0].find_all(['th', 'td'])
                 header_texts = [c.get_text(strip=True) for c in header_cells]
-                # Ensure we find the probability matrix table (contains 'Rate' and meeting columns, avoiding indicator tables)
                 if header_texts and header_texts[0].lower() == 'rate' and len(header_texts) > 1:
                     matrix_headers = header_texts
                     for tr in trs[1:]:
@@ -115,21 +121,6 @@ def scrape_fomc_data():
                         if cols:
                             matrix_rows.append(cols)
                     break
-
-        # Fallback if specific table wasn't matched above
-        if not matrix_headers:
-            for table in tables:
-                trs = table.find_all('tr')
-                if trs:
-                    header_cells = trs[0].find_all(['th', 'td'])
-                    header_texts = [c.get_text(strip=True) for c in header_cells]
-                    if any('Rate' in h for h in header_texts) and not any('Indicator' in h for h in header_texts):
-                        matrix_headers = header_texts
-                        for tr in trs[1:]:
-                            cols = [c.get_text(strip=True) for c in tr.find_all(['td', 'th'])]
-                            if cols:
-                                matrix_rows.append(cols)
-                        break
 
         if not matrix_headers:
             matrix_headers = ["Rate", "Sep 26", "Oct 26", "Dec 26"]
@@ -158,16 +149,42 @@ def scrape_fomc_data():
                     processed_row.append({"val": val, "is_header": False, "bg": bg, "color": color})
             processed_matrix_rows.append(processed_row)
 
-        return banner_text, banner_sub, meetings, matrix_headers, processed_matrix_rows
+        # Update cache successfully
+        cache["banner_text"] = banner_text
+        cache["banner_sub"] = banner_sub
+        cache["meetings"] = meetings if meetings else cache["meetings"]
+        cache["matrix_headers"] = matrix_headers
+        cache["matrix_rows"] = processed_matrix_rows
+        cache["last_updated"] = time.time()
 
+    except Exception as e:
+        print(f"Scraper error: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
+
+def background_scraper():
+    while True:
+        scrape_fomc_data()
+        # Refresh data every 15 minutes in the background
+        time.sleep(900)
+
+# Start background thread so web port binds instantly on startup
+threading.Thread(target=background_scraper, daemon=True).start()
 
 @app.route("/")
 def index():
-    banner, banner_sub, meetings, matrix_headers, matrix_rows = scrape_fomc_data()
-    return render_template("index.html", banner=banner, banner_sub=banner_sub, meetings=meetings, matrix_headers=matrix_headers, matrix_rows=matrix_rows)
+    return render_template(
+        "index.html", 
+        banner=cache["banner_text"], 
+        banner_sub=cache["banner_sub"], 
+        meetings=cache["meetings"], 
+        matrix_headers=cache["matrix_headers"], 
+        matrix_rows=cache["matrix_rows"]
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port)
