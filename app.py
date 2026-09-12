@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Flask, render_template
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -9,8 +10,19 @@ from bs4 import BeautifulSoup
 import time
 import re
 import os
+import threading
 
 app = Flask(__name__)
+
+# Global cache so page loads instantly and passes Render port-binding health checks
+cache = {
+    "banner": "Markets price tightening across upcoming meetings.",
+    "banner_sub": "Per-meeting percentages describe the same single expected path.",
+    "meetings": [],
+    "matrix_headers": [],
+    "processed_matrix_rows": [],
+    "last_updated": "Initializing..."
+}
 
 def scrape_fomc_data():
     options = Options()
@@ -157,10 +169,35 @@ def scrape_fomc_data():
     finally:
         driver.quit()
 
+def background_scraper():
+    global cache
+    while True:
+        try:
+            banner, banner_sub, meetings, matrix_headers, processed_matrix_rows = scrape_fomc_data()
+            cache["banner"] = banner
+            cache["banner_sub"] = banner_sub
+            cache["meetings"] = meetings
+            cache["matrix_headers"] = matrix_headers
+            cache["processed_matrix_rows"] = processed_matrix_rows
+            cache["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        except Exception as e:
+            print(f"Background scraping error: {e}")
+        time.sleep(900)  # Refresh every 15 minutes
+
+# Start background thread so the app binds to Render's port immediately on startup
+threading.Thread(target=background_scraper, daemon=True).start()
+
 @app.route("/")
 def index():
-    banner, banner_sub, meetings, matrix_headers, matrix_rows = scrape_fomc_data()
-    return render_template("index.html", banner=banner, banner_sub=banner_sub, meetings=meetings, matrix_headers=matrix_headers, matrix_rows=matrix_rows)
+    return render_template(
+        "index.html",
+        banner=cache["banner"],
+        banner_sub=cache["banner_sub"],
+        meetings=cache["meetings"],
+        matrix_headers=cache["matrix_headers"],
+        matrix_rows=cache["processed_matrix_rows"]
+    )
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
