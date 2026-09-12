@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 import time
 import re
+import os
 
 app = Flask(__name__)
 
@@ -156,4 +157,5 @@ def index():
     return render_template("index.html", banner=banner, banner_sub=banner_sub, meetings=meetings, matrix_headers=matrix_headers, matrix_rows=matrix_rows)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
