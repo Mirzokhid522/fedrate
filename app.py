@@ -1,6 +1,7 @@
 from flask import Flask, render_template
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -17,22 +18,33 @@ def scrape_fomc_data():
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    
-    driver = webdriver.Chrome(options=options)
-    
+
+    # Set binary path for Linux (Render) environment
+    if os.path.exists("/usr/bin/chromium"):
+        options.binary_location = "/usr/bin/chromium"
+    elif os.path.exists("/usr/bin/chromium-browser"):
+        options.binary_location = "/usr/bin/chromium-browser"
+
+    # Set driver path for Linux (Render) environment
+    if os.path.exists("/usr/bin/chromedriver"):
+        service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=options)
+    else:
+        driver = webdriver.Chrome(options=options)
+
     try:
         driver.get("https://centralbank.watch/federal-reserve/")
         time.sleep(4)
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
-        
+
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        
+
         # --- 1. Scrape First Table ---
         banner_text = "Markets price tightening across upcoming meetings."
         banner_sub = "Per-meeting percentages describe the same single expected path."
-        
+
         for el in soup.find_all(['div', 'section']):
             txt = el.get_text(separator=' ', strip=True)
             if "tightening in total" in txt or "hikes" in txt:
@@ -42,33 +54,33 @@ def scrape_fomc_data():
                 if len(sentences) >= 2:
                     banner_sub = sentences[1] + '.'
                 break
-                
+
         meetings = []
         date_pattern = re.compile(r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}', re.IGNORECASE)
-        
+
         for row in soup.find_all(['tr', 'div']):
             text = row.get_text(separator=' ', strip=True)
             if date_pattern.search(text) and "%" in text:
                 match = date_pattern.search(text)
                 meeting_date = match.group(0)
-                
+
                 if not any(m['date'] == meeting_date for m in meetings):
                     pcts = re.findall(r'\d+\.\d+%', text)
                     bps = re.findall(r'[+-]?\d+\.?\d*\s*bp', text)
                     rates = re.findall(r'\b[345]\.\d{2}%\b', text)
-                    
+
                     prob_val = pcts[0] if pcts else "0.0%"
                     bp_val = bps[0] if bps else "+0.0 bp"
                     rate_val = rates[0] if rates else "0.00%"
-                    
+
                     higher_match = re.search(r'higher\s*(\d+\.\d+%)', text, re.IGNORECASE)
                     same_match = re.search(r'same\s*(\d+\.\d+%)', text, re.IGNORECASE)
                     lower_match = re.search(r'lower\s*(\d+\.\d+%)', text, re.IGNORECASE)
-                    
+
                     higher_val = f"higher {higher_match.group(1)}" if higher_match else "higher 0.0%"
                     same_val = f"same {same_match.group(1)}" if same_match else "same 0.0%"
                     lower_val = f"lower {lower_match.group(1)}" if lower_match else "lower 0.0%"
-                    
+
                     try:
                         numeric_prob = float(prob_val.replace('%', '').strip())
                     except ValueError:
@@ -88,7 +100,7 @@ def scrape_fomc_data():
         # --- 2. Scrape Second Matrix Table ---
         matrix_headers = []
         matrix_rows = []
-        
+
         tables = soup.find_all('table')
         for table in tables:
             trs = table.find_all('tr')
